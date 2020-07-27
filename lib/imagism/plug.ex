@@ -1,28 +1,90 @@
 defmodule Imagism.Plug do
+  @moduledoc """
+  The plug handles the HTTP requests.
+  """
   import Plug.Conn
 
+  @doc """
+  Initialises the plug using the provided `adapter`.
+  """
+  @spec init(Imagism.Adapter.t()) :: any
   def init(adapter) do
     adapter
   end
 
+  @doc """
+  Processes `image` using the provided `params` and then
+  responds to `conn`.
+  """
+  @spec process(Plug.Conn.t(), Imagism.Image.t(), Imagism.Params.t()) :: Plug.Conn.t()
   def process(conn, image, params) do
     content_type = Imagism.Image.content_type(image)
 
     steps = [
+      # Handle ?w, ?h and ?fit
       fn image ->
         {w, h} = Imagism.Image.dimensions(image)
-        fallback_w = if params.h != nil, do: Kernel.round(params.h * w / h), else: w
-        fallback_h = if params.w != nil, do: Kernel.round(params.w * h / w), else: h
+        aspect_w = if params.h != nil, do: Kernel.round(params.h * w / h), else: w
+        aspect_h = if params.w != nil, do: Kernel.round(params.w * h / w), else: h
 
         {
           :ok,
           if params.w != nil or params.h != nil do
-            Imagism.Image.resize_exact(image, params.w || fallback_w, params.h || fallback_h)
+            case params.resize do
+              :crop ->
+                {x_ratio, y_ratio} =
+                  Enum.reduce({0.5, 0.5}, fn crop_opt, {x_ratio, y_ratio} ->
+                    case crop_opt do
+                      :top -> {x_ratio, 0}
+                      :bottom -> {x_ratio, 1}
+                      :left -> {0, y_ratio}
+                      :right -> {1, y_ratio}
+                      _ -> {x_ratio, y_ratio}
+                    end
+                  end)
+
+                Imagism.Image.crop(
+                  image,
+                  Kernel.round(x_ratio * w),
+                  Kernel.round(y_ratio * h),
+                  params.w || aspect_w,
+                  params.h || aspect_h
+                )
+
+              :exact ->
+                Imagism.Image.resize(image, params.w || w, params.h || h)
+
+              _ ->
+                Imagism.Image.resize(image, params.w || aspect_w, params.h || aspect_h)
+            end
           else
             image
           end
         }
       end,
+
+      # Handle ?flip
+      fn image ->
+        {
+          :ok,
+          case params.flip do
+            :h -> Imagism.Image.fliph(image)
+            :v -> Imagism.Image.flipv(image)
+            :hv -> Imagism.Image.fliph(Imagism.Image.flipv(image))
+            _ -> image
+          end
+        }
+      end,
+
+      # Handle ?rotate
+      fn image ->
+        {
+          :ok,
+          if(params.rotate != nil, do: Imagism.Image.rotate(image, params.rotate), else: image)
+        }
+      end,
+
+      # Handle ?brighten
       fn image ->
         {:ok,
          if(params.brighten != nil,
@@ -30,14 +92,19 @@ defmodule Imagism.Plug do
            else: image
          )}
       end,
+
+      # Handle ?blur
       fn image ->
         {:ok, if(params.blur != nil, do: Imagism.Image.blur(image, params.blur), else: image)}
       end,
+
+      # Output the final processed binary
       fn image ->
         Imagism.Image.encode(image)
       end
     ]
 
+    # Produces the final processed image. Any error will ignore future steps.
     processed_image =
       Enum.reduce(
         steps,
@@ -61,6 +128,12 @@ defmodule Imagism.Plug do
     end
   end
 
+  @doc """
+  Handles a connection using the initialised `adapter`.
+  The request path is passed onto the `adapter`, parses the
+  query params into image processing parameters and then processes the image.
+  """
+  @spec call(Plug.Conn.t(), Imagism.Adapter.t()) :: Plug.Conn.t()
   def call(conn, adapter) do
     case Imagism.Adapter.open(adapter, conn.request_path) do
       {:ok, image} ->

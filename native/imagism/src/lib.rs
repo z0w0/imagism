@@ -1,3 +1,6 @@
+/// A NIF for image processing using the `image` crate.
+/// At the moment, this is not as fast as it should be as it
+/// is doing a lot of derefering of ARCs.
 #[macro_use]
 extern crate rustler;
 extern crate image;
@@ -15,6 +18,7 @@ use rustler::resource::ResourceArc;
 use rustler::types::OwnedBinary;
 use rustler::{Encoder, Env, Error, Term};
 
+/// Contains all atoms passed back as Elixir terms.
 mod atoms {
     rustler_atoms! {
         atom ok;
@@ -35,34 +39,41 @@ mod atoms {
     }
 }
 
+/// A loaded image resource that can be processed.
 struct ImageResource {
+    /// The loaded image.
     pub image: DynamicImage,
+
+    /// The original format that the image was loaded in.
     pub format: ImageFormat,
 }
 
 rustler_export_nifs!(
     "Elixir.Imagism.Native",
     [
-        ("open", 1, open_image),
-        ("save", 2, save_image),
-        ("brighten", 2, brighten_image),
-        ("blur", 2, blur_image),
-        ("resize", 3, resize_image),
-        ("resize_exact", 3, resize_exact_image),
+        ("open", 1, open),
+        ("brighten", 2, brighten),
+        ("blur", 2, blur),
+        ("resize", 3, resize),
         ("content_type", 1, content_type),
-        ("dimensions", 1, image_dimensions),
-        ("crop", 5, crop_image),
-        ("encode", 1, encode_image)
+        ("dimensions", 1, dimensions),
+        ("flipv", 1, flipv),
+        ("fliph", 1, fliph),
+        ("rotate", 2, rotate),
+        ("crop", 5, crop),
+        ("encode", 1, encode)
     ],
     Some(on_load)
 );
 
+/// Initialises the NIF.
 fn on_load(env: Env, _info: Term) -> bool {
     resource_struct_init!(ImageResource, env);
 
     true
 }
 
+/// Converts a loaded image to an ARC wrapped as an Elixir term.
 fn image_to_term<'a>(env: Env<'a>, image: DynamicImage, format: ImageFormat) -> Term<'a> {
     ResourceArc::new(ImageResource {
         image: image,
@@ -71,6 +82,7 @@ fn image_to_term<'a>(env: Env<'a>, image: DynamicImage, format: ImageFormat) -> 
     .encode(env)
 }
 
+/// Converts an IoError to a Elixir term.
 fn io_error_to_term<'a>(env: Env<'a>, err: &IoError) -> Term<'a> {
     match err.kind() {
         IoErrorKind::NotFound => atoms::enoent().encode(env),
@@ -81,6 +93,7 @@ fn io_error_to_term<'a>(env: Env<'a>, err: &IoError) -> Term<'a> {
     }
 }
 
+/// Converts an ImageError to an Elixir term.
 fn image_error_to_term<'a>(env: Env<'a>, err: &ImageError) -> Term<'a> {
     (
         atoms::error(),
@@ -96,7 +109,9 @@ fn image_error_to_term<'a>(env: Env<'a>, err: &ImageError) -> Term<'a> {
         .encode(env)
 }
 
-fn open_image<'a>(env: Env<'a>, args: &[Term<'a>]) -> Result<Term<'a>, Error> {
+/// Opens an image from a specific file path.
+/// Generally it's best to pass in an absolute path.
+fn open<'a>(env: Env<'a>, args: &[Term<'a>]) -> Result<Term<'a>, Error> {
     let path: String = args[0].decode()?;
 
     match Reader::open(path) {
@@ -112,16 +127,7 @@ fn open_image<'a>(env: Env<'a>, args: &[Term<'a>]) -> Result<Term<'a>, Error> {
     }
 }
 
-fn save_image<'a>(env: Env<'a>, args: &[Term<'a>]) -> Result<Term<'a>, Error> {
-    let resource: ResourceArc<ImageResource> = args[0].decode()?;
-    let path: String = args[1].decode()?;
-
-    Ok(match resource.image.save(path) {
-        Ok(_) => (atoms::ok(), ()).encode(env),
-        Err(err) => image_error_to_term(env, &err),
-    })
-}
-
+/// Returns the original content type of the image.
 fn content_type<'a>(env: Env<'a>, args: &[Term<'a>]) -> Result<Term<'a>, Error> {
     let resource: ResourceArc<ImageResource> = args[0].decode()?;
 
@@ -136,27 +142,36 @@ fn content_type<'a>(env: Env<'a>, args: &[Term<'a>]) -> Result<Term<'a>, Error> 
     .encode(env))
 }
 
-fn blur_image<'a>(env: Env<'a>, args: &[Term<'a>]) -> Result<Term<'a>, Error> {
+/// Blurs an image by a sigma.
+fn blur<'a>(env: Env<'a>, args: &[Term<'a>]) -> Result<Term<'a>, Error> {
     let resource: ResourceArc<ImageResource> = args[0].decode()?;
     let sigma: f32 = args[1].decode()?;
 
     Ok(image_to_term(env, resource.image.blur(sigma), resource.format).encode(env))
 }
 
-fn resize_image<'a>(env: Env<'a>, args: &[Term<'a>]) -> Result<Term<'a>, Error> {
+/// Rotates an image by 90, 180 or 270 degrees.
+/// If the rotation amount doesn't match either of those three
+/// then the image is ketp alone.
+fn rotate<'a>(env: Env<'a>, args: &[Term<'a>]) -> Result<Term<'a>, Error> {
     let resource: ResourceArc<ImageResource> = args[0].decode()?;
-    let w: u32 = args[1].decode()?;
-    let h: u32 = args[2].decode()?;
+    let rotation: u32 = args[1].decode()?;
 
-    Ok(image_to_term(
-        env,
-        resource.image.resize(w, h, FilterType::Triangle),
-        resource.format,
-    )
-    .encode(env))
+    if rotation != 90 && rotation != 180 && rotation != 270 {
+        return Ok(resource.encode(env));
+    }
+
+    let rotated = match rotation {
+        90 => resource.image.rotate90(),
+        180 => resource.image.rotate180(),
+        _ => resource.image.rotate270(),
+    };
+
+    Ok(image_to_term(env, rotated, resource.format).encode(env))
 }
 
-fn crop_image<'a>(env: Env<'a>, args: &[Term<'a>]) -> Result<Term<'a>, Error> {
+/// Crops an image at a point in certain dimensions.
+fn crop<'a>(env: Env<'a>, args: &[Term<'a>]) -> Result<Term<'a>, Error> {
     let resource: ResourceArc<ImageResource> = args[0].decode()?;
     let x: u32 = args[1].decode()?;
     let y: u32 = args[2].decode()?;
@@ -166,7 +181,8 @@ fn crop_image<'a>(env: Env<'a>, args: &[Term<'a>]) -> Result<Term<'a>, Error> {
     Ok(image_to_term(env, resource.image.crop_imm(x, y, w, h), resource.format).encode(env))
 }
 
-fn resize_exact_image<'a>(env: Env<'a>, args: &[Term<'a>]) -> Result<Term<'a>, Error> {
+/// Resizes an image to exact dimensions.
+fn resize<'a>(env: Env<'a>, args: &[Term<'a>]) -> Result<Term<'a>, Error> {
     let resource: ResourceArc<ImageResource> = args[0].decode()?;
     let w: u32 = args[1].decode()?;
     let h: u32 = args[2].decode()?;
@@ -179,20 +195,37 @@ fn resize_exact_image<'a>(env: Env<'a>, args: &[Term<'a>]) -> Result<Term<'a>, E
     .encode(env))
 }
 
-fn brighten_image<'a>(env: Env<'a>, args: &[Term<'a>]) -> Result<Term<'a>, Error> {
+/// Brightens an image by a constant.
+fn brighten<'a>(env: Env<'a>, args: &[Term<'a>]) -> Result<Term<'a>, Error> {
     let resource: ResourceArc<ImageResource> = args[0].decode()?;
     let value: i32 = args[1].decode()?;
 
     Ok(image_to_term(env, resource.image.brighten(value), resource.format).encode(env))
 }
 
-fn image_dimensions<'a>(env: Env<'a>, args: &[Term<'a>]) -> Result<Term<'a>, Error> {
+/// Flips an image vertically.
+fn flipv<'a>(env: Env<'a>, args: &[Term<'a>]) -> Result<Term<'a>, Error> {
+    let resource: ResourceArc<ImageResource> = args[0].decode()?;
+
+    Ok(image_to_term(env, resource.image.flipv(), resource.format).encode(env))
+}
+
+/// Flips an image horizontally.
+fn fliph<'a>(env: Env<'a>, args: &[Term<'a>]) -> Result<Term<'a>, Error> {
+    let resource: ResourceArc<ImageResource> = args[0].decode()?;
+
+    Ok(image_to_term(env, resource.image.fliph(), resource.format).encode(env))
+}
+
+/// Returns the dimensions of the image.
+fn dimensions<'a>(env: Env<'a>, args: &[Term<'a>]) -> Result<Term<'a>, Error> {
     let resource: ResourceArc<ImageResource> = args[0].decode()?;
 
     Ok(resource.image.dimensions().encode(env))
 }
 
-fn encode_image<'a>(env: Env<'a>, args: &[Term<'a>]) -> Result<Term<'a>, Error> {
+/// Encodes an image to an Elixir binary string.
+fn encode<'a>(env: Env<'a>, args: &[Term<'a>]) -> Result<Term<'a>, Error> {
     let resource: ResourceArc<ImageResource> = args[0].decode()?;
     let mut vec: Vec<u8> = Vec::new();
 

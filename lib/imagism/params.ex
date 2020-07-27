@@ -6,12 +6,14 @@ defmodule Imagism.Params do
 
   defstruct w: nil,
             h: nil,
-            fit: nil,
+            resize: nil,
             brighten: nil,
             blur: nil,
-            flip: nil
+            flip: nil,
+            crop: nil,
+            rotate: nil
 
-  defp parse_int(str) do
+  defp parse_int(str) when is_binary(str) or is_nil(str) do
     if str == nil do
       nil
     else
@@ -22,7 +24,7 @@ defmodule Imagism.Params do
     end
   end
 
-  defp parse_float(str) do
+  defp parse_float(str) when is_binary(str) or is_nil(str) do
     if str == nil do
       nil
     else
@@ -42,16 +44,44 @@ defmodule Imagism.Params do
     h = parse_int(query_params["h"])
     brighten = parse_int(query_params["brighten"])
     blur = parse_float(query_params["blur"])
-    flip = query_params["flip"]
-    fit = query_params["fit"]
+    rotate = parse_int(query_params["rotate"])
+
+    flip =
+      case query_params["flip"] do
+        "h" -> :h
+        "v" -> :v
+        "hv" -> :hv
+        _ -> nil
+      end
+
+    resize =
+      case query_params["fit"] do
+        "crop" -> :crop
+        "exact" -> :exact
+        _ -> :fit
+      end
+
+    crop =
+      String.split(query_params["crop"] || "center", ",")
+      |> Enum.map(fn crop_type ->
+        case crop_type do
+          "top" -> :top
+          "bottom" -> :bottom
+          "left" -> :left
+          "right" -> :right
+          _ -> :unknown
+        end
+      end)
 
     %Imagism.Params{
       w: w,
       h: h,
-      fit: fit,
+      resize: resize,
       brighten: brighten,
       blur: blur,
-      flip: flip
+      flip: flip,
+      crop: crop,
+      rotate: rotate
     }
   end
 end
