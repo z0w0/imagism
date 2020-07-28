@@ -12,6 +12,9 @@ defmodule Imagism.Native do
   @spec brighten(Imagism.Image.t(), integer()) :: Imagism.Image.t()
   def brighten(_image, _value), do: error()
 
+  @spec contrast(Imagism.Image.t(), float()) :: Imagism.Image.t()
+  def contrast(_image, _value), do: error()
+
   @spec blur(Imagism.Image.t(), float()) :: Imagism.Image.t()
   def blur(_image, _sigma), do: error()
 
@@ -33,9 +36,12 @@ defmodule Imagism.Native do
   @spec dimensions(Imagism.Image.t()) :: {integer(), integer()}
   def dimensions(_image), do: error()
 
-  @spec encode(Imagism.Image.t()) :: {:error, any} | {:ok, binary()}
+  @spec encode(Imagism.Image.t()) :: {:error, any} | {:ok, bitstring()}
   def encode(_image), do: error()
 
   @spec rotate(Imagism.Image.t(), integer()) :: Imagism.Image.t()
   def rotate(_image, _rotation), do: error()
+
+  @spec decode(bitstring()) :: {:error, any} | {:ok, Imagism.Image.t()}
+  def decode(_binary), do: error()
 end

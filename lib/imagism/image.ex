@@ -30,6 +30,18 @@ defmodule Imagism.Image do
   end
 
   @doc """
+  Decodes an image from `bits`. It will guess the image's file format
+  or default to JPEG.
+  """
+  @spec decode(bitstring()) :: {:error, any} | {:ok, Imagism.Image.t()}
+  def decode(bits) when is_bitstring(bits) do
+    case Imagism.Native.decode(bits) do
+      {:ok, res} -> {:ok, Imagism.Image.wrap_resource(res)}
+      err -> err
+    end
+  end
+
+  @doc """
   Returns the MIME type of an `image`.
   """
   @spec content_type(Imagism.Image.t()) :: String.t()
@@ -61,6 +73,15 @@ defmodule Imagism.Image do
   @spec brighten(Imagism.Image.t(), integer) :: Imagism.Image.t()
   def brighten(image, value) when is_integer(value) do
     Imagism.Image.wrap_resource(Imagism.Native.brighten(image.resource, value))
+  end
+
+  @doc """
+  Adjusts the contrast of `image` by a constant `value`.
+  If the value is negative, the contrast will be decreased.
+  """
+  @spec contrast(Imagism.Image.t(), float) :: Imagism.Image.t()
+  def contrast(image, value) when is_float(value) do
+    Imagism.Image.wrap_resource(Imagism.Native.contrast(image.resource, value))
   end
 
   @doc """

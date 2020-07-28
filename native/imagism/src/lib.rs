@@ -6,6 +6,7 @@ extern crate rustler;
 extern crate image;
 extern crate rustler_codegen;
 
+use std::io::Cursor;
 use std::io::Error as IoError;
 use std::io::ErrorKind as IoErrorKind;
 use std::io::Write;
@@ -15,7 +16,7 @@ use image::imageops::FilterType;
 use image::io::Reader;
 use image::{DynamicImage, GenericImageView, ImageFormat};
 use rustler::resource::ResourceArc;
-use rustler::types::OwnedBinary;
+use rustler::types::{Binary, OwnedBinary};
 use rustler::{Encoder, Env, Error, Term};
 
 /// Contains all atoms passed back as Elixir terms.
@@ -53,6 +54,7 @@ rustler_export_nifs!(
     [
         ("open", 1, open),
         ("brighten", 2, brighten),
+        ("contrast", 2, contrast),
         ("blur", 2, blur),
         ("resize", 3, resize),
         ("content_type", 1, content_type),
@@ -61,7 +63,8 @@ rustler_export_nifs!(
         ("fliph", 1, fliph),
         ("rotate", 2, rotate),
         ("crop", 5, crop),
-        ("encode", 1, encode)
+        ("encode", 1, encode),
+        ("decode", 1, decode)
     ],
     Some(on_load)
 );
@@ -203,6 +206,14 @@ fn brighten<'a>(env: Env<'a>, args: &[Term<'a>]) -> Result<Term<'a>, Error> {
     Ok(image_to_term(env, resource.image.brighten(value), resource.format).encode(env))
 }
 
+/// Adjusts the contrast of an image by a constant.
+fn contrast<'a>(env: Env<'a>, args: &[Term<'a>]) -> Result<Term<'a>, Error> {
+    let resource: ResourceArc<ImageResource> = args[0].decode()?;
+    let value: f32 = args[1].decode()?;
+
+    Ok(image_to_term(env, resource.image.adjust_contrast(value), resource.format).encode(env))
+}
+
 /// Flips an image vertically.
 fn flipv<'a>(env: Env<'a>, args: &[Term<'a>]) -> Result<Term<'a>, Error> {
     let resource: ResourceArc<ImageResource> = args[0].decode()?;
@@ -238,4 +249,23 @@ fn encode<'a>(env: Env<'a>, args: &[Term<'a>]) -> Result<Term<'a>, Error> {
         }
         Err(err) => image_error_to_term(env, &err),
     })
+}
+
+/// Decodes an image from an Elixir binary string.
+fn decode<'a>(env: Env<'a>, args: &[Term<'a>]) -> Result<Term<'a>, Error> {
+    let bin: Binary<'a> = args[0].decode()?;
+
+    Ok(
+        match Reader::new(Cursor::new(bin.as_slice())).with_guessed_format() {
+            Ok(reader) => {
+                let format = reader.format().unwrap_or(ImageFormat::Jpeg);
+
+                match reader.decode() {
+                    Ok(image) => (atoms::ok(), image_to_term(env, image, format)).encode(env),
+                    Err(err) => image_error_to_term(env, &err),
+                }
+            }
+            Err(err) => (atoms::error(), io_error_to_term(env, &err)).encode(env),
+        },
+    )
 }

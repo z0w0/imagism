@@ -5,7 +5,7 @@ defmodule Imagism.Adapter do
   """
   @type t() :: %Imagism.Adapter{}
 
-  defstruct type: nil, file_path: nil
+  defstruct type: nil, file_path: nil, s3_bucket: nil, s3_region: nil
 
   @doc """
   Creates a new file adapter that loads images from the directory `path`.
@@ -19,12 +19,37 @@ defmodule Imagism.Adapter do
   end
 
   @doc """
+  Creates a new S3 adapter that loads images from a `bucket` (in `region`).
+  The credentials will be loaded from the standard AWS
+  environment variables.
+  """
+  @spec new_s3(binary, binary) :: Imagism.Adapter.t()
+  def new_s3(bucket, region) when is_binary(bucket) and is_binary(region) do
+    %Imagism.Adapter{
+      type: :s3,
+      s3_bucket: bucket,
+      s3_region: region
+    }
+  end
+
+  @doc """
   Opens an image by `path` using the provided `adapter`.
   """
   @spec open(Imagism.Adapter.t(), binary) :: {:ok, Imagism.Image.t()} | {:error, any}
   def open(adapter, path) do
     case adapter.type do
-      :file -> Imagism.Image.open(Path.join(adapter.file_path, path))
+      :file ->
+        Imagism.Image.open(Path.join(adapter.file_path, path))
+
+      :s3 ->
+        res =
+          ExAws.S3.get_object(adapter.s3_bucket, path) |> ExAws.request(region: adapter.s3_region)
+
+        case res do
+          {:ok, %{body: body}} -> Imagism.Image.decode(body)
+          {:error, {:http_error, 404, _}} -> {:error, :enoent}
+          {:error, err} -> {:error, err}
+        end
     end
   end
 end

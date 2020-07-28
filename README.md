@@ -2,6 +2,7 @@
 
 Imagism is a simple image processing server with a query parameter based API.
 It processes images from a local directory on the filesystem or a S3 bucket.
+Imagism is built with Elixir for HTTP serving and a NIF built with Rust for the image processing.
 
 ## Usage
 
@@ -43,8 +44,9 @@ Imagism is configured through environment variables. If you're running it locall
 | IMAGISM_S3_BUCKET     | The S3 bucket to load images from if using the `s3` adapter   | `bucket-name`                 |
 | AWS_ACCESS_KEY_ID     | The AWS access key to use with the `s3` adapter               | `<secret>`                    |
 | AWS_SECRET_ACCESS_KEY | The AWS secret key to use with the `s3` adapter               | `<secret>`                    |
+| PORT                  | The port to run the server on                                 | `8000`                        |
 
-To run the server, run `mix deps.get && mix run --no-halt`.
+To run the server locally, clone the codebase and run `mix deps.get && mix run --no-halt`.
 
 ## Tests
 

@@ -25,7 +25,10 @@ defmodule Imagism.MixProject do
     [
       {:rustler, "~> 0.21.1"},
       {:plug_cowboy, "~> 2.0"},
-      {:envy, "~> 1.1.1"}
+      {:ex_aws, "~> 2.0"},
+      {:ex_aws_s3, "~> 2.0"},
+      {:hackney, "~> 1.9"},
+      {:jason, "~> 1.2"}
     ]
   end
 

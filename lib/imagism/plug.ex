@@ -3,6 +3,9 @@ defmodule Imagism.Plug do
   The plug handles the HTTP requests.
   """
   import Plug.Conn
+  use Plug.Builder
+
+  plug(Plug.Logger)
 
   @doc """
   Initialises the plug using the provided `adapter`.
@@ -16,8 +19,10 @@ defmodule Imagism.Plug do
   Processes `image` using the provided `params` and then
   responds to `conn`.
   """
-  @spec process(Plug.Conn.t(), Imagism.Image.t(), Imagism.Params.t()) :: Plug.Conn.t()
-  def process(conn, image, params) do
+  @spec process_image(Plug.Conn.t(), Imagism.Image.t(), Imagism.Params.t()) :: Plug.Conn.t()
+  def process_image(conn, image, params) do
+    Logger.metadata(Map.to_list(Map.from_struct(params)))
+
     content_type = Imagism.Image.content_type(image)
 
     steps = [
@@ -93,6 +98,15 @@ defmodule Imagism.Plug do
          )}
       end,
 
+      # Handle ?contrast
+      fn image ->
+        {:ok,
+         if(params.contrast != nil,
+           do: Imagism.Image.contrast(image, params.contrast),
+           else: image
+         )}
+      end,
+
       # Handle ?blur
       fn image ->
         {:ok, if(params.blur != nil, do: Imagism.Image.blur(image, params.blur), else: image)}
@@ -133,11 +147,11 @@ defmodule Imagism.Plug do
   The request path is passed onto the `adapter`, parses the
   query params into image processing parameters and then processes the image.
   """
-  @spec call(Plug.Conn.t(), Imagism.Adapter.t()) :: Plug.Conn.t()
-  def call(conn, adapter) do
+  @spec open_image(Plug.Conn.t(), Imagism.Adapter.t()) :: Plug.Conn.t()
+  def open_image(conn, adapter) do
     case Imagism.Adapter.open(adapter, conn.request_path) do
       {:ok, image} ->
-        Imagism.Plug.process(
+        Imagism.Plug.process_image(
           conn,
           image,
           Imagism.Params.new(Plug.Conn.fetch_query_params(conn).query_params)
@@ -153,5 +167,16 @@ defmodule Imagism.Plug do
         |> put_resp_content_type("text/plain")
         |> send_resp(500, "Adapter error: #{error}")
     end
+  end
+
+  @doc """
+  Handles the connection `conn` and calls the other plugs.
+  """
+  @spec call(Plug.Conn.t(), Imagism.Adapter.t()) :: Plug.Conn.t()
+  def call(conn, opts) do
+    conn
+    |> super(opts)
+    |> assign(:called_all_plugs, true)
+    |> open_image(opts)
   end
 end

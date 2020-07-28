@@ -8,6 +8,7 @@ defmodule Imagism.Params do
             h: nil,
             resize: nil,
             brighten: nil,
+            contrast: nil,
             blur: nil,
             flip: nil,
             crop: nil,
@@ -43,6 +44,7 @@ defmodule Imagism.Params do
     w = parse_int(query_params["w"])
     h = parse_int(query_params["h"])
     brighten = parse_int(query_params["brighten"])
+    contrast = parse_int(query_params["contrast"])
     blur = parse_float(query_params["blur"])
     rotate = parse_int(query_params["rotate"])
 
@@ -78,6 +80,7 @@ defmodule Imagism.Params do
       h: h,
       resize: resize,
       brighten: brighten,
+      contrast: contrast,
       blur: blur,
       flip: flip,
       crop: crop,
