@@ -7,7 +7,7 @@ Imagism is built with Elixir for HTTP serving and a NIF built with Rust for the 
 ## Usage
 
 To process and serve an image, just hit a running Imagism server with the image file path that you want
-to serve relative to the adapter that you've configured (file, S3, or proxy). Imagism
+to serve relative to the adapter that you've configured (file or S3). Imagism
 fetches the image file from that adapter and then runs any image processing operations
 on it based on the query parameters below.
 
@@ -20,6 +20,9 @@ on it based on the query parameters below.
 | h         | The height to resize the image to.                                             | `0-inf`                            |
 | resize    | The strategy for resizing the image. See **Resizing** below.                   | `exact`, `fit` or `crop`           |
 | crop      | The stragegy for cropping the image if `?resize=crop`. See **Resizing** below. | `top`, `left`, `right` or `bottom` |
+
+For example, `http://localhost:8000/sloth.jpg?w=500&flip=v` will load `sloth.jpg`, resize it to 500 pixels wide
+while maintaining the aspect ratio and then will flip the image vertically.
 
 ### Resizing
 
