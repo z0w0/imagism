@@ -57,7 +57,7 @@ defmodule Imagism.Params do
       end
 
     resize =
-      case query_params["fit"] do
+      case query_params["resize"] do
         "crop" -> :crop
         "exact" -> :exact
         _ -> :fit
