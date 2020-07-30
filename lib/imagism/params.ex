@@ -44,7 +44,7 @@ defmodule Imagism.Params do
     w = parse_int(query_params["w"])
     h = parse_int(query_params["h"])
     brighten = parse_int(query_params["brighten"])
-    contrast = parse_int(query_params["contrast"])
+    contrast = parse_float(query_params["contrast"])
     blur = parse_float(query_params["blur"])
     rotate = parse_int(query_params["rotate"])
 
@@ -60,18 +60,18 @@ defmodule Imagism.Params do
       case query_params["resize"] do
         "crop" -> :crop
         "exact" -> :exact
-        _ -> :fit
+        _ -> nil
       end
 
     crop =
-      String.split(query_params["crop"] || "center", ",")
+      String.split(query_params["crop"] || "", ",")
       |> Enum.map(fn crop_type ->
         case crop_type do
           "top" -> :top
           "bottom" -> :bottom
           "left" -> :left
           "right" -> :right
-          _ -> :unknown
+          _ -> :center
         end
       end)
 

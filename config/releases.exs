@@ -1,7 +1,7 @@
 import Config
 
 config :imagism,
-  port: System.get_env("PORT"),
+  port: System.get_env("PORT") || 8000,
   adapter: System.get_env("IMAGISM_ADAPTER"),
   file_path: System.get_env("IMAGISM_FILE_PATH"),
   s3_bucket: System.get_env("IMAGISM_S3_BUCKET"),

@@ -10,7 +10,7 @@ defmodule Imagism.Plug do
   @doc """
   Initialises the plug using the provided `adapter`.
   """
-  @spec init(Imagism.Adapter.t()) :: any
+  @spec init(Imagism.Adapter.t()) :: Imagism.Adapter.t()
   def init(adapter) do
     adapter
   end
@@ -38,7 +38,7 @@ defmodule Imagism.Plug do
             case params.resize do
               :crop ->
                 {x_ratio, y_ratio} =
-                  Enum.reduce({0.5, 0.5}, fn crop_opt, {x_ratio, y_ratio} ->
+                  Enum.reduce(params.crop, {0.5, 0.5}, fn crop_opt, {x_ratio, y_ratio} ->
                     case crop_opt do
                       :top -> {x_ratio, 0}
                       :bottom -> {x_ratio, 1}
@@ -48,12 +48,15 @@ defmodule Imagism.Plug do
                     end
                   end)
 
+                crop_w = params.w || aspect_w
+                crop_h = params.h || aspect_h
+
                 Imagism.Image.crop(
                   image,
-                  Kernel.round(x_ratio * w),
-                  Kernel.round(y_ratio * h),
-                  params.w || aspect_w,
-                  params.h || aspect_h
+                  Kernel.max(0, Kernel.min(w - crop_w, Kernel.round(x_ratio * w - crop_w / 2))),
+                  Kernel.max(0, Kernel.min(h - crop_h, Kernel.round(y_ratio * h - crop_h / 2))),
+                  crop_w,
+                  crop_h
                 )
 
               :exact ->
