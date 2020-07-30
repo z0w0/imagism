@@ -39,16 +39,28 @@ defmodule Imagism.Adapter do
   def open(adapter, path) do
     case adapter.type do
       :file ->
-        Imagism.Image.open(Path.join(adapter.file_path, path))
+        case File.read(Path.join(adapter.file_path, path)) do
+          {:ok, file_data} ->
+            Imagism.Image.decode(file_data)
+
+          err ->
+            err
+        end
 
       :s3 ->
         res =
-          ExAws.S3.get_object(adapter.s3_bucket, path) |> ExAws.request(region: adapter.s3_region)
+          ExAws.S3.get_object(adapter.s3_bucket, path)
+          |> ExAws.request(region: adapter.s3_region)
 
         case res do
-          {:ok, %{body: body}} -> Imagism.Image.decode(body)
-          {:error, {:http_error, 404, _}} -> {:error, :enoent}
-          {:error, err} -> {:error, err}
+          {:ok, %{body: s3_data}} ->
+            Imagism.Image.decode(s3_data)
+
+          {:error, {:http_error, 404, _}} ->
+            {:error, :enoent}
+
+          err ->
+            err
         end
     end
   end

@@ -19,8 +19,9 @@ defmodule Imagism.Plug do
   Processes `image` using the provided `params` and then
   responds to `conn`.
   """
-  @spec process_image(Plug.Conn.t(), Imagism.Image.t(), Imagism.Params.t()) :: Plug.Conn.t()
-  def process_image(conn, image, params) do
+  @spec process_image(Imagism.Image.t(), Imagism.Params.t()) ::
+          {:ok, {binary(), bitstring()}} | {:error, any}
+  def process_image(image, params) do
     Logger.metadata(Map.to_list(Map.from_struct(params)))
 
     content_type = Imagism.Image.content_type(image)
@@ -133,15 +134,8 @@ defmodule Imagism.Plug do
       )
 
     case processed_image do
-      {:ok, binary} ->
-        conn
-        |> put_resp_content_type(content_type)
-        |> send_resp(200, binary)
-
-      {:error, error} ->
-        conn
-        |> put_resp_content_type("text/plain")
-        |> send_resp(500, "Process error: #{error}")
+      {:ok, data} -> {:ok, {content_type, data}}
+      err -> err
     end
   end
 
@@ -152,23 +146,42 @@ defmodule Imagism.Plug do
   """
   @spec open_image(Plug.Conn.t(), Imagism.Adapter.t()) :: Plug.Conn.t()
   def open_image(conn, adapter) do
-    case Imagism.Adapter.open(adapter, conn.request_path) do
-      {:ok, image} ->
-        Imagism.Plug.process_image(
-          conn,
-          image,
-          Imagism.Params.new(Plug.Conn.fetch_query_params(conn).query_params)
-        )
+    path = conn.request_path
+    params = Imagism.Params.new(Plug.Conn.fetch_query_params(conn).query_params)
+    key = {adapter.type, path, params}
+    cached = Imagism.Cache.get(key)
 
-      {:error, :enoent} ->
-        conn
-        |> put_resp_content_type("text/plain")
-        |> send_resp(404, "Not found")
+    if cached != nil do
+      conn
+      |> put_resp_content_type(elem(cached, 0))
+      |> send_resp(200, elem(cached, 1))
+    else
+      case Imagism.Adapter.open(adapter, path) do
+        {:ok, image} ->
+          case Imagism.Plug.process_image(image, params) do
+            {:ok, {content_type, data}} ->
+              Imagism.Cache.put(key, {content_type, data})
 
-      {:error, error} ->
-        conn
-        |> put_resp_content_type("text/plain")
-        |> send_resp(500, "Adapter error: #{error}")
+              conn
+              |> put_resp_content_type(content_type)
+              |> send_resp(200, data)
+
+            {:error, error} ->
+              conn
+              |> put_resp_content_type("text/plain")
+              |> send_resp(500, "Process error: #{error}")
+          end
+
+        {:error, :enoent} ->
+          conn
+          |> put_resp_content_type("text/plain")
+          |> send_resp(404, "Not found")
+
+        {:error, error} ->
+          conn
+          |> put_resp_content_type("text/plain")
+          |> send_resp(500, "Adapter error: #{error}")
+      end
     end
   end
 

@@ -28,7 +28,9 @@ defmodule Imagism.MixProject do
       {:ex_aws, "~> 2.0"},
       {:ex_aws_s3, "~> 2.0"},
       {:jason, "~> 1.2"},
-      {:httpoison, "~> 1.6"}
+      {:httpoison, "~> 1.6"},
+      {:nebulex, "~> 2.0.0-rc.0"},
+      {:shards, "~> 0.6"}
     ]
   end
 

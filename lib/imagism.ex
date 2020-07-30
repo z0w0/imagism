@@ -31,7 +31,8 @@ defmodule Imagism do
     port = Application.fetch_env!(:imagism, :port)
 
     children = [
-      {Plug.Cowboy, scheme: :http, plug: {Imagism.Plug, adapter}, options: [port: port]}
+      {Plug.Cowboy, scheme: :http, plug: {Imagism.Plug, adapter}, options: [port: port]},
+      {Imagism.Cache, []}
     ]
 
     Logger.info("Listening on port #{port}")
